@@ -1,0 +1,13 @@
+{
+  "name": "monitor",
+  "version": "1.0.0",
+  "main": "monitor.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "start": "node monitor.js"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.2"
+  }
+}

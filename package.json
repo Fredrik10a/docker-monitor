@@ -1,0 +1,19 @@
+{
+  "name": "docker-monitor",
+  "version": "1.0.0",
+  "main": "monitor.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "lint": "eslint docker-monitor/**/*.{js,jsx} --format compact"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "eslint-plugin-react": "^7.34.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "prettier": "^3.2.5"
+  }
+}
