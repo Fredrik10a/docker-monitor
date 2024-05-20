@@ -1,4 +1,3 @@
-const { exec } = require('child_process');
 const Docker = require('dockerode');
 const docker = new Docker();
 
@@ -14,12 +13,22 @@ async function getContainerRestarts(container) {
     }
 }
 
+async function getImageDetails(ImageID) {
+    try {
+        const data = await docker.getImage(ImageID).inspect();
+        return data;
+    } catch (error) {
+        console.error(`Error inspecting image ${ImageID}:`, error);
+        return null;
+    }
+}
+
 async function getPreviousImage(container) {
     try {
         const data = await container.inspect();
         const currentImageId = data.Image;
 
-        const currentImageDetails = await docker.getImage(currentImageId).inspect();
+        const currentImageDetails = await getImageDetails(currentImageId);
         const currentImageRepoTags = currentImageDetails.RepoTags[0];
         const repoName = currentImageRepoTags.split(':')[0];
 
@@ -48,34 +57,60 @@ async function getPreviousImage(container) {
     }
 }
 
-async function switchToPreviousImage(container) {
+async function switchToPreviousImage(container, name) {
     const previousImage = await getPreviousImage(container);
     if (!previousImage) {
-        console.error(`No previous image found for container ${container.id}.`);
+        console.error(`No previous image found for container ${name} - ${container.id}.`);
         return;
     }
+    console.log('--- Performing switch to previous image... ---');
 
-    console.log(`Switching container ${container.id} to previous image ${previousImage}...`);
+    console.log(`Switching container ${name} - ${container.id} to previous image ${previousImage}...`);
 
     try {
         // Stop the container
         await container.stop();
-        console.log(`Stopped container ${container.id}.`);
+        console.log(`Stopped container ${name} - ${container.id}.`);
 
         // Remove the container
         await container.remove();
-        console.log(`Removed container ${container.id}.`);
+        console.log(`Removed container ${name} - ${container.id}.`);
 
-        // Run a new container with the previous image
-        exec(`docker run -d --name ${container.id} ${previousImage}`, (err, stdout, stderr) => {
-            if (err) {
-                console.error(`Error starting container with previous image ${previousImage}: ${stderr}`);
-                return;
-            }
-            console.log(`Switched container ${container.id} to previous image.`);
+        // Create and start a new container with the previous image
+        const newContainer = await docker.createContainer({
+            Image: previousImage,
+            name: name,
         });
+        await newContainer.start();
+        console.log(`Switched container ${name} to previous image ${previousImage}.`);
     } catch (error) {
-        console.error(`Error handling container ${container.id}:`, error);
+        console.error(`Error handling container ${name} - ${container.id}:`, error);
+    }
+}
+
+async function outputSummary(containerDetails) {
+    // Calculate column widths
+    const columns = ['name', 'state', 'status', 'currentImageRepoTags', 'curImageID'];
+    const columnWidths = {};
+
+    for (const column of columns) {
+        columnWidths[column] = Math.max(column.length, ...containerDetails.map((detail) => detail[column].length));
+    }
+
+    // Create a header row
+    const headerRow = columns.map((column) => column.padEnd(columnWidths[column])).join(' | ');
+
+    // Create rows for each container
+    const rows = containerDetails.map((detail) => {
+        return columns.map((column) => detail[column].padEnd(columnWidths[column])).join(' | ');
+    });
+
+    // Output the table
+    console.log('');
+    console.log(headerRow);
+    console.log('-'.repeat(headerRow.length));
+    for (const row of rows) {
+        console.log(row);
     }
 }
 
@@ -83,16 +118,31 @@ async function monitor() {
     while (true) {
         try {
             const containers = await docker.listContainers({ all: true });
+            const containerDetails = [];
 
             for (const containerInfo of containers) {
                 const container = docker.getContainer(containerInfo.Id);
+                const curImageID = containerInfo.ImageID.replace('sha256:', '');
+                const state = containerInfo.State;
+                const status = containerInfo.Status;
+                const name = containerInfo.Names[0].replace('/', '');
                 const restarts = await getContainerRestarts(container);
-                console.log(`Container ${containerInfo.Names[0]} restarts: ${restarts}`);
 
                 if (restarts > MAX_RESTARTS) {
-                    await switchToPreviousImage(container);
+                    await switchToPreviousImage(container, name);
+                } else {
+                    const curImage = await getImageDetails(curImageID);
+                    const currentImageRepoTags = curImage.RepoTags[0];
+                    containerDetails.push({
+                        name,
+                        state,
+                        status,
+                        currentImageRepoTags,
+                        curImageID,
+                    });
                 }
             }
+            await outputSummary(containerDetails);
 
             await new Promise((resolve) => setTimeout(resolve, 5000)); // Check every 5 seconds
         } catch (error) {
