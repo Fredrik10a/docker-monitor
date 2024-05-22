@@ -115,7 +115,8 @@ async function outputSummary(containerDetails) {
 }
 
 async function monitor() {
-    while (true) {
+    const forever = true;
+    while (forever) {
         try {
             const containers = await docker.listContainers({ all: true });
             const containerDetails = [];

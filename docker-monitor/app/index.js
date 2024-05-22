@@ -18,7 +18,6 @@ setInterval(() => {
         // Simulate a crash by throwing an error
         throw new Error('Simulated crash');
     }
-
 }, 2000);
 
 app.listen(port, () => {
